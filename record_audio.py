@@ -5,6 +5,8 @@ import keyboard
 import time
 import numpy as np  
 import os 
+import pygame 
+import scipy 
 
 # Audio recording settings
 FORMAT = pyaudio.paInt16
@@ -68,6 +70,12 @@ class AudioRecorder:
         self.stream.close()
         print("Recording stopped. Saving file...")
         self.save_file()
+
+        if self.tracks:
+            latest_track = self.tracks[-1]
+            print(f"Playing the latest track: {latest_track}")
+            self.visualize_kaleidoscope(latest_track)
+            
         self.play_tracks() 
 
     def save_file(self):
@@ -161,6 +169,84 @@ class AudioRecorder:
         self.tracks = []
         self.track_count = 0
         print("All tracks cleared.")
+    
+    def visualize_kaleidoscope(self, filename):
+        """Visualize the audio file with a dynamic kaleidoscope animation using FFT and Pygame."""
+        import scipy.ndimage
+
+        # Initialize Pygame
+        pygame.init()
+        screen = pygame.display.set_mode((800, 600))
+        pygame.display.set_caption("Kaleidoscope Visualization with FFT")
+        clock = pygame.time.Clock()
+
+        # Read the audio file
+        with wave.open(filename, 'rb') as wf:
+            n_frames = wf.getnframes()
+            audio_data = wf.readframes(n_frames)
+            audio_signal = np.frombuffer(audio_data, dtype=np.int16)
+
+        # Normalize the audio signal
+        audio_signal = audio_signal / np.max(np.abs(audio_signal))
+
+        # Start audio playback in a separate thread
+        threading.Thread(target=self.play_track, args=(filename,), daemon=True).start()
+
+        # Kaleidoscope parameters
+        size = 400  # Size of the kaleidoscope base image
+        base_image = np.random.rand(size, size, 3) * 255  # Random RGB base image
+        base_image = base_image.astype(np.uint8)
+
+        running = True
+        frame = 0  # Frame counter for animation
+        while running:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    running = False
+
+            # Clear the screen
+            screen.fill((0, 0, 0))
+
+            # Generate FFT from the audio signal
+            chunk_size = 2048  # Number of audio samples to process per frame
+            start = (frame * chunk_size) % len(audio_signal)
+            end = start + chunk_size
+            audio_chunk = audio_signal[start:end]
+
+            if len(audio_chunk) > 0:
+                # Perform FFT and get frequency magnitudes
+                fft_result = np.fft.fft(audio_chunk)
+                fft_magnitude = np.abs(fft_result[:len(fft_result) // 2])  # Take positive frequencies
+                fft_magnitude = fft_magnitude / np.max(fft_magnitude)  # Normalize
+
+                # Map FFT magnitudes to visual properties
+                intensity = int(np.mean(fft_magnitude) * 255)  # Average intensity
+                rotation_angle = int(np.sum(fft_magnitude * np.arange(len(fft_magnitude))) % 360)  # Weighted rotation
+                color_shift = (intensity % 255, (intensity * 2) % 255, (intensity * 3) % 255)  # Dynamic color
+
+                # Rotate and color-shift the base image
+                rotated_image = scipy.ndimage.rotate(base_image, rotation_angle, reshape=False)  # Rotate image
+                kaleidoscope_image = np.tile(rotated_image, (2, 2, 1))[:size, :size, :]  # Ensure 3D shape
+                kaleidoscope_image = (kaleidoscope_image + np.array(color_shift)) % 255  # Apply color shift
+                kaleidoscope_image = kaleidoscope_image.astype(np.uint8)
+
+                # Create symmetry by mirroring the image
+                mirrored_image = np.concatenate((kaleidoscope_image, kaleidoscope_image[:, ::-1, :]), axis=1)
+                mirrored_image = np.concatenate((mirrored_image, mirrored_image[::-1, :, :]), axis=0)
+
+                # Smooth the image using Gaussian blur
+                smoothed_image = scipy.ndimage.gaussian_filter(mirrored_image, sigma=5)
+
+                # Convert to Pygame surface and display
+                surface = pygame.surfarray.make_surface(smoothed_image)
+                screen.blit(pygame.transform.scale(surface, (800, 600)), (0, 0))
+
+            # Update the display
+            pygame.display.flip()
+            clock.tick(60)
+            frame += 1
+
+        pygame.quit()
 
 
 def main():
