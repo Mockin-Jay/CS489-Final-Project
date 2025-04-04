@@ -171,13 +171,13 @@ class AudioRecorder:
         print("All tracks cleared.")
     
     def visualize_kaleidoscope(self, filename):
-        """Visualize the audio file with a dynamic kaleidoscope animation using FFT and Pygame."""
+        """Visualize the audio file with dynamic patterns, colors, and visuals using FFT and Pygame."""
         import scipy.ndimage
 
         # Initialize Pygame
         pygame.init()
         screen = pygame.display.set_mode((800, 600))
-        pygame.display.set_caption("Kaleidoscope Visualization with FFT")
+        pygame.display.set_caption("Dynamic Kaleidoscope Visualization")
         clock = pygame.time.Clock()
 
         # Read the audio file
@@ -219,26 +219,35 @@ class AudioRecorder:
                 fft_magnitude = np.abs(fft_result[:len(fft_result) // 2])  # Take positive frequencies
                 fft_magnitude = fft_magnitude / np.max(fft_magnitude)  # Normalize
 
-                # Map FFT magnitudes to visual properties
-                intensity = int(np.mean(fft_magnitude) * 255)  # Average intensity
-                rotation_angle = int(np.sum(fft_magnitude * np.arange(len(fft_magnitude))) % 360)  # Weighted rotation
-                color_shift = (intensity % 255, (intensity * 2) % 255, (intensity * 3) % 255)  # Dynamic color
+                # Split FFT into frequency bands
+                low_band = np.mean(fft_magnitude[:len(fft_magnitude) // 3])  # Low frequencies
+                mid_band = np.mean(fft_magnitude[len(fft_magnitude) // 3:2 * len(fft_magnitude) // 3])  # Mid frequencies
+                high_band = np.mean(fft_magnitude[2 * len(fft_magnitude) // 3:])  # High frequencies
 
-                # Rotate and color-shift the base image
+                # Map frequency bands to visual properties
+                rotation_angle = int(mid_band * 360)  # Rotate based on mid frequencies
+                scale_factor = 1 + low_band * 2  # Scale based on low frequencies
+                color_shift = (int(high_band * 255), int(mid_band * 255), int(low_band * 255))  # Color based on bands
+
+                # Rotate and scale the base image
                 rotated_image = scipy.ndimage.rotate(base_image, rotation_angle, reshape=False)  # Rotate image
-                kaleidoscope_image = np.tile(rotated_image, (2, 2, 1))[:size, :size, :]  # Ensure 3D shape
-                kaleidoscope_image = (kaleidoscope_image + np.array(color_shift)) % 255  # Apply color shift
-                kaleidoscope_image = kaleidoscope_image.astype(np.uint8)
+                scaled_image = scipy.ndimage.zoom(rotated_image, (scale_factor, scale_factor, 1), order=1)  # Scale image
+                scaled_image = scaled_image[:size, :size, :]  # Crop to original size
 
                 # Create symmetry by mirroring the image
-                mirrored_image = np.concatenate((kaleidoscope_image, kaleidoscope_image[:, ::-1, :]), axis=1)
+                mirrored_image = np.concatenate((scaled_image, scaled_image[:, ::-1, :]), axis=1)
                 mirrored_image = np.concatenate((mirrored_image, mirrored_image[::-1, :, :]), axis=0)
 
-                # Smooth the image using Gaussian blur
-                smoothed_image = scipy.ndimage.gaussian_filter(mirrored_image, sigma=5)
+                # Apply color shift
+                mirrored_image = (mirrored_image + np.array(color_shift)) % 255
+                mirrored_image = mirrored_image.astype(np.uint8)
+
+                # Add radial patterns using sine waves
+                for i in range(0, size, 10):
+                    pygame.draw.circle(screen, color_shift, (400, 300), int(i * mid_band), 1)
 
                 # Convert to Pygame surface and display
-                surface = pygame.surfarray.make_surface(smoothed_image)
+                surface = pygame.surfarray.make_surface(mirrored_image)
                 screen.blit(pygame.transform.scale(surface, (800, 600)), (0, 0))
 
             # Update the display
