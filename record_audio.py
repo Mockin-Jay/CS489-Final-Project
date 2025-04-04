@@ -1,16 +1,17 @@
 import pyaudio
 import wave
 import threading
-import keyboard  # Install with `pip install keyboard`
+import keyboard  
 import time
-import numpy as np  # Install with `pip install numpy`
+import numpy as np  
+import os 
 
 # Audio recording settings
 FORMAT = pyaudio.paInt16
 CHANNELS = 1
 RATE = 44100
 CHUNK = 1024
-GAIN = 5.0  # Amplification factor for volume
+GAIN = 10.0  
 
 class AudioRecorder:
     def __init__(self):
@@ -83,6 +84,19 @@ class AudioRecorder:
     def terminate(self):
         self.audio.terminate()
 
+    def clear_tracks(self):
+        """Delete all track files and reset track count."""
+        print("Clearing all tracks...")
+        for file in os.listdir('.'):
+            if file.startswith('track_') and file.endswith('.wav'):
+                try:
+                    os.remove(file)
+                    print(f"Deleted {file}")
+                except Exception as e:
+                    print(f"Error deleting file {file}: {e}")
+        self.track_count = 0
+        print("All tracks cleared.")
+
 def main():
     recorder = AudioRecorder()
 
@@ -95,6 +109,13 @@ def main():
         elif keyboard.is_pressed('s'):  # Stop and save
             recorder.stop_recording()
             while keyboard.is_pressed('s'):  # Prevent multiple triggers
+                pass
+        elif keyboard.is_pressed('c'):  # Clear tracks
+            if recorder.recording:
+                recorder.stop_recording()
+            recorder.clear_tracks()
+            print("Program restarted. Press 'r' to start recording.")
+            while keyboard.is_pressed('c'):
                 pass
         elif keyboard.is_pressed('q'):  # Quit
             if recorder.recording:
